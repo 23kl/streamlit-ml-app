@@ -1,0 +1,16 @@
+streamlit
+python-dotenv
+langchain
+langchain-community
+langchain-groq
+faiss-cpu
+sentence-transformers
+deep-translator
+SpeechRecognition
+streamlit-mic-recorder
+pydub
+ffmpeg-python
+elevenlabs
+
+
+
