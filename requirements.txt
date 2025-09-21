@@ -4,13 +4,10 @@ langchain
 langchain-community
 langchain-groq
 faiss-cpu
-sentence-transformers
+huggingface-hub
 deep-translator
-SpeechRecognition
+speechrecognition
 streamlit-mic-recorder
-pydub
-ffmpeg-python
 elevenlabs
-
 
 
