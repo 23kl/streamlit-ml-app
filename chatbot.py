@@ -16,7 +16,6 @@ from elevenlabs import save
 from deep_translator import GoogleTranslator
 import speech_recognition as sr
 from streamlit_mic_recorder import mic_recorder
-from pydub import AudioSegment
 
 # Load environment variables
 load_dotenv()
@@ -40,8 +39,8 @@ user_lang = st.selectbox("🌐 Select your language:", list(languages.keys()), i
 # 🔊 Voice mapping (replace with your actual voice IDs from ElevenLabs)
 voice_map = {
     "English": "21m00Tcm4TlvDq8ikWAM",   # Rachel
-    "Hindi": "1qEiC6qsybMkmnNdVMbK",      # e.g., Akash
-    "Marathi": "1qEiC6qsybMkmnNdVMbK",  # Indian-accent male/female
+    "Hindi": "1qEiC6qsybMkmnNdVMbK",
+    "Marathi": "1qEiC6qsybMkmnNdVMbK",
     "Gujarati": "1qEiC6qsybMkmnNdVMbK",
     "Tamil": "gqFUMFHCD2nbbcYVtPGB"
 }
@@ -85,20 +84,20 @@ if mode == "Text":
 
 elif mode == "Voice":
     st.write("🎙️ Speak your query")
-    audio_data = mic_recorder(start_prompt="Start Recording", stop_prompt="Stop Recording", key="recorder")
+    audio_data = mic_recorder(
+        start_prompt="Start Recording",
+        stop_prompt="Stop Recording",
+        key="recorder",
+        format="wav"  # ✅ Directly get WAV format
+    )
 
     if audio_data and "bytes" in audio_data:
-        # Save mic recording temporarily (webm)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmpfile:
+        # Save directly as WAV file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
             tmpfile.write(audio_data["bytes"])
-            tmpfile_path = tmpfile.name
+            wav_path = tmpfile.name
 
-        # Convert WebM → WAV
-        wav_path = tmpfile_path.replace(".webm", ".wav")
-        sound = AudioSegment.from_file(tmpfile_path, format="webm")
-        sound.export(wav_path, format="wav")
-
-        # Recognize speech
+        # Recognize speech with Google Speech Recognition
         recognizer = sr.Recognizer()
         with sr.AudioFile(wav_path) as source:
             audio = recognizer.record(source)
@@ -133,9 +132,7 @@ if st.button("Get Answer"):
 
             # ElevenLabs TTS
             client = ElevenLabs(api_key=elevenlabs_api_key)
-
-            # Pick voice for the chosen language
-            selected_voice = voice_map.get(user_lang, "21m00Tcm4TlvDq8ikWAM")  # fallback Rachel
+            selected_voice = voice_map.get(user_lang, "21m00Tcm4TlvDq8ikWAM")
 
             audio = client.text_to_speech.convert(
                 text=tts_text,
@@ -148,3 +145,4 @@ if st.button("Get Answer"):
             audio_file = "response.mp3"
             save(audio, audio_file)
             st.audio(audio_file, format="audio/mp3")
+
