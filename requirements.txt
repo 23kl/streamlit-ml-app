@@ -1,13 +1,12 @@
 streamlit
-python-dotenv
 langchain
 langchain-community
 langchain-groq
 faiss-cpu
-transformers
-torch
+sentence-transformers
+gtts
 deep-translator
 speechrecognition
 streamlit-mic-recorder
-sentence-transformers
-google-cloud-texttospeech
+pydub
+python-dotenv
