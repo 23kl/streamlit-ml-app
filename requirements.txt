@@ -4,11 +4,10 @@ langchain
 langchain-community
 langchain-groq
 faiss-cpu
-huggingface-hub
+transformers
+torch
 deep-translator
 speechrecognition
 streamlit-mic-recorder
 pydub
-requests
-gTTS
-sentence-transformers
+gtts
