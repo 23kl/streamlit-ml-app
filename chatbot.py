@@ -1,29 +1,32 @@
 import os
 import re
-import tempfile
+import io
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.chains import RetrievalQA
 from langchain_groq import ChatGroq
 
 # Voice + Translation
-from elevenlabs.client import ElevenLabs
-from elevenlabs import save
 from deep_translator import GoogleTranslator
 import speech_recognition as sr
 from streamlit_mic_recorder import mic_recorder
 from pydub import AudioSegment
+import tempfile
+import base64
 
+# ---------------------------
 # Load environment variables
+# ---------------------------
 load_dotenv()
 groq_api_key = os.getenv("GROQ_API_KEY")
-elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
 
+# ---------------------------
 # Streamlit UI
+# ---------------------------
 st.set_page_config(page_title="Farmer's Herb Chatbot", page_icon="🌿")
 st.title("🌿 Farmer’s Herb & Regulation Chatbot")
 
@@ -37,16 +40,9 @@ languages = {
 }
 user_lang = st.selectbox("🌐 Select your language:", list(languages.keys()), index=0)
 
-# 🔊 Voice mapping (replace with your actual voice IDs from ElevenLabs)
-voice_map = {
-    "English": "21m00Tcm4TlvDq8ikWAM",   # Rachel
-    "Hindi": "1qEiC6qsybMkmnNdVMbK",      # e.g., Akash
-    "Marathi": "1qEiC6qsybMkmnNdVMbK",  # Indian-accent male/female
-    "Gujarati": "1qEiC6qsybMkmnNdVMbK",
-    "Tamil": "gqFUMFHCD2nbbcYVtPGB"
-}
-
+# ---------------------------
 # Load vector store
+# ---------------------------
 @st.cache_resource
 def load_vector_store():
     loader = TextLoader("app/india_herbs_regions_soil_climate_rules.csv")
@@ -59,94 +55,104 @@ def load_vector_store():
 
 vectorstore = load_vector_store()
 
+# ---------------------------
 # Initialize Groq LLM
+# ---------------------------
 llm = ChatGroq(model="llama-3.1-8b-instant", api_key=groq_api_key)
 
-# Create RAG pipeline
+# RAG pipeline
 qa = RetrievalQA.from_chain_type(
     llm=llm,
     retriever=vectorstore.as_retriever(),
     chain_type="stuff"
 )
 
-# Function to clean text before TTS
+# ---------------------------
+# Utility functions
+# ---------------------------
 def clean_text_for_tts(text: str) -> str:
-    text = re.sub(r"[*_#`]", "", text)  # remove markdown chars
+    text = re.sub(r"[*_#`]", "", text)  # remove markdown
     text = text.replace("•", " ").replace("-", " ")
     text = text.replace(":", ": ")
     return text.strip()
 
+def text_to_audio_stream(text: str, lang_code: str):
+    """Generate base64-encoded audio using gTTS for Streamlit playback."""
+    from gtts import gTTS
+    tts = gTTS(text=text, lang=lang_code, slow=False)
+    tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+    tts.save(tmpfile.name)
+    return tmpfile.name
+
+# ---------------------------
 # Input method
+# ---------------------------
 mode = st.radio("Choose Input Method:", ["Text", "Voice"])
 query_text = ""
 
+# --- Text Input ---
 if mode == "Text":
     query_text = st.text_input("Ask your question about herbs & regulations:")
 
+# --- Voice Input ---
 elif mode == "Voice":
     st.write("🎙️ Speak your query")
     audio_data = mic_recorder(start_prompt="Start Recording", stop_prompt="Stop Recording", key="recorder")
 
-    if audio_data and "bytes" in audio_data:
-        # Save mic recording temporarily (webm)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmpfile:
-            tmpfile.write(audio_data["bytes"])
-            tmpfile_path = tmpfile.name
-
-        # Convert WebM → WAV
-        wav_path = tmpfile_path.replace(".webm", ".wav")
-        sound = AudioSegment.from_file(tmpfile_path, format="webm")
-        sound.export(wav_path, format="wav")
-
-        # Recognize speech
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(wav_path) as source:
-            audio = recognizer.record(source)
+    if audio_data and "bytes" in audio_data and audio_data["bytes"]:
         try:
+            # Convert WebM bytes to AudioSegment
+            webm_fp = io.BytesIO(audio_data["bytes"])
+            sound = AudioSegment.from_file(webm_fp, format="webm")
+
+            # Export to WAV in-memory
+            wav_fp = io.BytesIO()
+            sound.export(wav_fp, format="wav")
+            wav_fp.seek(0)
+
+            # Recognize speech
+            recognizer = sr.Recognizer()
+            with sr.AudioFile(wav_fp) as source:
+                audio = recognizer.record(source)
             query_text = recognizer.recognize_google(audio, language=languages[user_lang])
             st.write("🗣️ You said:", query_text)
         except sr.UnknownValueError:
             st.error("❌ Sorry, I could not understand the audio.")
         except sr.RequestError as e:
-            st.error(f"❌ Could not request results; {e}")
+            st.error(f"❌ Speech recognition error: {e}")
+        except Exception as e:
+            st.error(f"❌ Audio processing failed: {e}")
 
+# ---------------------------
 # Run query
+# ---------------------------
 if st.button("Get Answer"):
-    if query_text.strip() == "":
+    if not query_text.strip():
         st.warning("Please enter or speak a question.")
     else:
         with st.spinner("Thinking..."):
-            # Translate query → English
-            query_in_english = GoogleTranslator(source='auto', target='en').translate(query_text)
+            try:
+                # Translate query → English
+                query_in_english = GoogleTranslator(source='auto', target='en').translate(query_text)
 
-            # Get answer
-            answer = qa.run(query_in_english)
+                # Get answer from Groq
+                answer = qa.run(query_in_english)
 
-            # Translate back to user language
-            answer_translated = GoogleTranslator(source='en', target=languages[user_lang]).translate(answer)
+                # Translate back to user language
+                answer_translated = GoogleTranslator(source='en', target=languages[user_lang]).translate(answer)
 
-            # Show text
-            st.success(answer_translated)
+                # Display text
+                st.subheader("📝 Answer:")
+                st.success(answer_translated)
 
-            # Prepare for TTS
-            tts_text = clean_text_for_tts(answer_translated)
+                # Generate audio
+                audio_file = text_to_audio_stream(answer_translated, languages[user_lang])
 
-            # ElevenLabs TTS
-            client = ElevenLabs(api_key=elevenlabs_api_key)
+                # Play audio
+                st.subheader("🔊 Audio Response:")
+                st.audio(audio_file, format="audio/mp3")
+        except Exception as e:
+            st.error(f"❌ Error processing your request: {e}")
 
-            # Pick voice for the chosen language
-            selected_voice = voice_map.get(user_lang, "21m00Tcm4TlvDq8ikWAM")  # fallback Rachel
-
-            audio = client.text_to_speech.convert(
-                text=tts_text,
-                voice_id=selected_voice,
-                model_id="eleven_multilingual_v2",
-                output_format="mp3_44100_128",
-            )
-
-            # Save & Play
-            audio_file = "response.mp3"
-            save(audio, audio_file)
-            st.audio(audio_file, format="audio/mp3")
 
 
