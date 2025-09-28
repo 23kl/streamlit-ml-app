@@ -28,7 +28,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for Clean UI
+# Custom CSS for Cleaner UI
 st.markdown("""
 <style>
     .main-header {
@@ -45,14 +45,6 @@ st.markdown("""
         text-align: center;
         margin-bottom: 2rem;
     }
-    .farmer-card {
-        background: linear-gradient(135deg, #f8fff8, #e8f5e8);
-        padding: 20px;
-        border-radius: 15px;
-        border-left: 5px solid #2E8B57;
-        margin: 10px 0px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
     .sidebar-section {
         background: #f0fff0;
         padding: 15px;
@@ -60,13 +52,18 @@ st.markdown("""
         margin: 10px 0px;
         border: 2px solid #90EE90;
     }
-    .simple-card {
-        background: white;
-        padding: 20px;
-        border-radius: 15px;
-        border: 2px solid #e0e0e0;
-        margin: 10px 0px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    .input-card {
+        background: transparent;
+        padding: 10px;
+        margin: 10px 0;
+    }
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div > div > div,
+    .stRadio > div { 
+        background-color: #f8f8f8;
+        border: 1px solid #dcdcdc;
+        border-radius: 10px;
+        padding: 8px;
     }
     .answer-box {
         background: linear-gradient(135deg, #e6ffe6, #ccffcc);
@@ -134,7 +131,7 @@ st.markdown("### 🌐 Choose Preferences")
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.markdown('<div class="simple-card">', unsafe_allow_html=True)
+    st.markdown('<div class="input-card">', unsafe_allow_html=True)
     languages = {
         "English": "en",
         "Hindi": "hi",
@@ -146,7 +143,7 @@ with col1:
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col2:
-    st.markdown('<div class="simple-card">', unsafe_allow_html=True)
+    st.markdown('<div class="input-card">', unsafe_allow_html=True)
     mode = st.radio("Choose Input Method:", ["Text", "Voice"], horizontal=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -154,7 +151,7 @@ with col2:
 st.markdown("### ❓ Ask Your Question")
 
 if mode == "Text":
-    st.markdown('<div class="simple-card">', unsafe_allow_html=True)
+    st.markdown('<div class="input-card">', unsafe_allow_html=True)
     query_text = st.text_input(
         "Type your question:",
         placeholder="e.g., How to grow Ashwagandha in Maharashtra?"
@@ -162,7 +159,7 @@ if mode == "Text":
     st.markdown('</div>', unsafe_allow_html=True)
 
 elif mode == "Voice":
-    st.markdown('<div class="simple-card">', unsafe_allow_html=True)
+    st.markdown('<div class="input-card">', unsafe_allow_html=True)
     st.markdown("#### 🎤 Speak Your Question")
     audio_data = mic_recorder(
         start_prompt="🎙️ Start Recording",
@@ -228,7 +225,7 @@ if get_answer_btn:
     if not query_text.strip():
         st.warning("⚠️ Please enter or speak a question first.")
     else:
-        st.markdown(f'<div class="simple-card"><h4>👤 Your Question:</h4><p>"{query_text}"</p></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="input-card"><h4>👤 Your Question:</h4><p>"{query_text}"</p></div>', unsafe_allow_html=True)
 
         query_in_english = GoogleTranslator(source='auto', target='en').translate(query_text)
         answer = qa.run(query_in_english)
@@ -256,3 +253,4 @@ st.markdown("""
     <p><small>Always consult local agricultural experts for specific regional advice</small></p>
 </div>
 """, unsafe_allow_html=True)
+
