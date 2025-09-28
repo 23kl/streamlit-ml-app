@@ -14,7 +14,6 @@ from langchain_groq import ChatGroq
 from deep_translator import GoogleTranslator
 import speech_recognition as sr
 from streamlit_mic_recorder import mic_recorder
-from pydub import AudioSegment
 from gtts import gTTS  # ✅ Google TTS
 
 # Load environment variables
@@ -42,7 +41,7 @@ def load_vector_store():
     documents = loader.load()
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = splitter.split_documents(documents)
-    embeddings = HuggingFaceEmbeddings()
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")  # ✅ small & fast
     vectorstore = FAISS.from_documents(chunks, embeddings)
     return vectorstore
 
@@ -74,18 +73,17 @@ if mode == "Text":
 
 elif mode == "Voice":
     st.write("🎙️ Speak your query")
-    audio_data = mic_recorder(start_prompt="Start Recording", stop_prompt="Stop Recording", key="recorder")
+    audio_data = mic_recorder(
+        start_prompt="Start Recording",
+        stop_prompt="Stop Recording",
+        key="recorder",
+        format="wav"   # ✅ directly record in wav, no ffmpeg/pydub needed
+    )
 
     if audio_data and "bytes" in audio_data:
-        # Save mic recording temporarily (webm)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmpfile:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
             tmpfile.write(audio_data["bytes"])
-            tmpfile_path = tmpfile.name
-
-        # Convert WebM → WAV
-        wav_path = tmpfile_path.replace(".webm", ".wav")
-        sound = AudioSegment.from_file(tmpfile_path, format="webm")
-        sound.export(wav_path, format="wav")
+            wav_path = tmpfile.name
 
         # Recognize speech
         recognizer = sr.Recognizer()
@@ -127,5 +125,6 @@ if st.button("Get Answer"):
 
             # Play audio
             st.audio(audio_file, format="audio/mp3")
+
 
 
