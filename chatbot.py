@@ -145,6 +145,65 @@ def autoplay_audio(audio_file):
     except Exception as e:
         st.error(f"Error playing audio: {e}")
 
+# Improved audio processing function
+def process_audio_data(audio_data):
+    """Process audio data from streamlit-mic-recorder with better error handling"""
+    if not audio_data or "bytes" not in audio_data:
+        return None
+        
+    try:
+        # Save the raw bytes to a file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
+            # Try to write as WAV directly if possible
+            tmpfile.write(audio_data["bytes"])
+            tmpfile_path = tmpfile.name
+        
+        # Try different approaches to read the audio
+        audio = None
+        
+        # Approach 1: Try reading as WAV directly
+        try:
+            audio = AudioSegment.from_file(tmpfile_path, format="wav")
+        except:
+            # Approach 2: Try reading as raw data with parameters
+            try:
+                audio = AudioSegment(
+                    data=audio_data["bytes"],
+                    sample_width=2,
+                    frame_rate=44100,
+                    channels=1
+                )
+            except:
+                # Approach 3: Use alternative conversion
+                try:
+                    # Save as raw and let pydub detect format
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".audio") as raw_file:
+                        raw_file.write(audio_data["bytes"])
+                        raw_path = raw_file.name
+                    
+                    audio = AudioSegment.from_file(raw_path)
+                    os.unlink(raw_path)
+                except Exception as e:
+                    st.error(f"All audio conversion methods failed: {e}")
+                    return None
+        
+        # Export to WAV for speech recognition
+        wav_path = tmpfile_path.replace(".wav", "_processed.wav")
+        audio.export(wav_path, format="wav")
+        
+        return wav_path
+        
+    except Exception as e:
+        st.error(f"Audio processing error: {e}")
+        return None
+    finally:
+        # Clean up temporary files
+        try:
+            if 'tmpfile_path' in locals() and os.path.exists(tmpfile_path):
+                os.unlink(tmpfile_path)
+        except:
+            pass
+
 # Input method
 mode = st.radio("Choose Input Method:", ["Text", "Voice"])
 query_text = ""
@@ -153,43 +212,68 @@ if mode == "Text":
     query_text = st.text_input("Ask your question about herbs & regulations:")
 
 elif mode == "Voice":
-    st.write("🎙️ Speak your query")
-    audio_data = mic_recorder(start_prompt="Start Recording", stop_prompt="Stop Recording", key="recorder")
+    st.write("🎙️ Speak your query (speak clearly after clicking 'Start Recording')")
+    
+    # Use mic_recorder with WAV format if possible
+    audio_data = mic_recorder(
+        start_prompt="🎤 Start Recording", 
+        stop_prompt="⏹️ Stop Recording", 
+        key="recorder",
+        format="wav" if hasattr(mic_recorder, 'format') else None
+    )
 
-    if audio_data and "bytes" in audio_data:
-        # Save mic recording temporarily (webm)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmpfile:
-            tmpfile.write(audio_data["bytes"])
-            tmpfile_path = tmpfile.name
+    if audio_data:
+        with st.spinner("Processing audio..."):
+            processed_audio_path = process_audio_data(audio_data)
+            
+            if processed_audio_path:
+                try:
+                    # Recognize speech
+                    recognizer = sr.Recognizer()
+                    with sr.AudioFile(processed_audio_path) as source:
+                        # Adjust for ambient noise
+                        recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                        audio = recognizer.record(source)
+                    
+                    try:
+                        query_text = recognizer.recognize_google(audio, language=languages[user_lang])
+                        st.success(f"🗣️ You said: {query_text}")
+                    except sr.UnknownValueError:
+                        st.error("❌ Sorry, I could not understand the audio. Please try again.")
+                    except sr.RequestError as e:
+                        st.error(f"❌ Speech recognition error: {e}")
+                        
+                except Exception as e:
+                    st.error(f"❌ Error processing audio: {e}")
+                finally:
+                    # Clean up processed audio file
+                    try:
+                        if os.path.exists(processed_audio_path):
+                            os.unlink(processed_audio_path)
+                    except:
+                        pass
+            else:
+                st.error("❌ Failed to process audio recording. Please try again.")
 
-        # Convert WebM → WAV
-        wav_path = tmpfile_path.replace(".webm", ".wav")
-        try:
-            sound = AudioSegment.from_file(tmpfile_path, format="webm")
-            sound.export(wav_path, format="wav")
-
-            # Recognize speech
-            recognizer = sr.Recognizer()
-            with sr.AudioFile(wav_path) as source:
-                audio = recognizer.record(source)
-            try:
-                query_text = recognizer.recognize_google(audio, language=languages[user_lang])
-                st.write("🗣️ You said:", query_text)
-            except sr.UnknownValueError:
-                st.error("❌ Sorry, I could not understand the audio.")
-            except sr.RequestError as e:
-                st.error(f"❌ Could not request results; {e}")
-        except Exception as e:
-            st.error(f"Error processing audio: {e}")
-        finally:
-            # Clean up temporary files
-            try:
-                if os.path.exists(tmpfile_path):
-                    os.unlink(tmpfile_path)
-                if os.path.exists(wav_path):
-                    os.unlink(wav_path)
-            except:
-                pass
+# Alternative simple voice input using speech_recognition directly
+st.markdown("---")
+st.subheader("Alternative Voice Input")
+if st.button("🎤 Use Simple Voice Input"):
+    try:
+        recognizer = sr.Recognizer()
+        with sr.Microphone() as source:
+            st.info("Speak now...")
+            recognizer.adjust_for_ambient_noise(source, duration=1)
+            audio = recognizer.listen(source, timeout=10)
+            
+        query_text = recognizer.recognize_google(audio, language=languages[user_lang])
+        st.success(f"🗣️ You said: {query_text}")
+    except sr.WaitTimeoutError:
+        st.error("❌ No speech detected within 10 seconds.")
+    except sr.UnknownValueError:
+        st.error("❌ Could not understand the audio.")
+    except Exception as e:
+        st.error(f"❌ Voice input error: {e}")
 
 # Run query
 if st.button("Get Answer"):
@@ -240,6 +324,12 @@ st.sidebar.markdown("""
    - Climate conditions
    - Government regulations
    - Farming techniques
+
+### 🎤 Voice Input Tips:
+- Speak clearly and slowly
+- Use the alternative voice input if the main one fails
+- Ensure microphone permissions are granted
+- Use in a quiet environment
 
 ### 🌿 Supported Languages:
 - English
