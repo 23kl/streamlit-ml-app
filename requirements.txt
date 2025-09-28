@@ -7,6 +7,4 @@ sentence-transformers
 gtts
 deep-translator
 speechrecognition
-streamlit-mic-recorder
-pydub
 python-dotenv
