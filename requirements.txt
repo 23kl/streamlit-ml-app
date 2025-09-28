@@ -10,3 +10,4 @@ speechrecognition
 streamlit-mic-recorder
 pydub
 requests
+gTTS
