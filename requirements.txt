@@ -1,10 +1,11 @@
 streamlit
+python-dotenv
 langchain
 langchain-community
-langchain-groq
 faiss-cpu
 sentence-transformers
-gtts
+gTTS
 deep-translator
-speechrecognition
-python-dotenv
+SpeechRecognition
+pydub
+streamlit-webrtc
