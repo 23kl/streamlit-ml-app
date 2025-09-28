@@ -1,5 +1,6 @@
 import os
 import re
+import io
 import tempfile
 import streamlit as st
 from dotenv import load_dotenv
@@ -8,15 +9,14 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.chains import RetrievalQA
-from langchain_groq import ChatGroq
+from langchain_groq import ChatGroq  # Groq LLM
 
 # Voice + Translation
 from gtts import gTTS
 from deep_translator import GoogleTranslator
-import speech_recognition as sr
 from streamlit_mic_recorder import mic_recorder
 from pydub import AudioSegment
-import io
+import speech_recognition as sr
 
 # Load environment variables
 load_dotenv()
@@ -59,7 +59,7 @@ qa = RetrievalQA.from_chain_type(
     chain_type="stuff"
 )
 
-# Function to clean text before TTS
+# Function to clean text for TTS
 def clean_text_for_tts(text: str) -> str:
     text = re.sub(r"[*_#`]", "", text)
     text = text.replace("•", " ").replace("-", " ")
@@ -92,28 +92,27 @@ elif mode == "Voice":
     st.write("🎙️ Speak your query")
     audio_data = mic_recorder(start_prompt="Start Recording", stop_prompt="Stop Recording", key="recorder")
 
-    if audio_data and "bytes" in audio_data:
-        # Save mic recording temporarily (webm)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmpfile:
-            tmpfile.write(audio_data["bytes"])
-            tmpfile_path = tmpfile.name
-
-        # Convert WebM → WAV
-        wav_path = tmpfile_path.replace(".webm", ".wav")
-        sound = AudioSegment.from_file(tmpfile_path, format="webm")
-        sound.export(wav_path, format="wav")
-
-        # Recognize speech
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(wav_path) as source:
-            audio = recognizer.record(source)
+    if audio_data and "bytes" in audio_data and audio_data["bytes"]:
         try:
+            # Convert bytes to AudioSegment
+            audio_fp = io.BytesIO(audio_data["bytes"])
+            sound = AudioSegment.from_file(audio_fp, format="webm")
+
+            # Export to WAV in memory
+            wav_fp = io.BytesIO()
+            sound.export(wav_fp, format="wav")
+            wav_fp.seek(0)
+
+            # Recognize speech
+            recognizer = sr.Recognizer()
+            with sr.AudioFile(wav_fp) as source:
+                audio = recognizer.record(source)
             query_text = recognizer.recognize_google(audio, language=languages[user_lang])
             st.write("🗣️ You said:", query_text)
-        except sr.UnknownValueError:
-            st.error("❌ Sorry, I could not understand the audio.")
-        except sr.RequestError as e:
-            st.error(f"❌ Could not request results; {e}")
+        except Exception as e:
+            st.error(f"❌ Audio processing failed: {e}")
+    else:
+        st.warning("No audio recorded. Please try again.")
 
 # Run query
 if st.button("Get Answer"):
@@ -125,24 +124,23 @@ if st.button("Get Answer"):
                 # Translate query → English
                 query_in_english = GoogleTranslator(source='auto', target='en').translate(query_text)
 
-                # Get answer
+                # Get answer from Groq LLM
                 answer = qa.run(query_in_english)
 
                 # Translate back to user language
                 answer_translated = GoogleTranslator(source='en', target=languages[user_lang]).translate(answer)
 
-                # Show text
+                # Show text answer
                 st.subheader("📝 Answer:")
                 st.success(answer_translated)
 
-                # Generate audio
+                # Generate audio response
                 st.subheader("🔊 Audio Response:")
                 audio_fp = text_to_speech_gtts(answer_translated, languages[user_lang])
                 if audio_fp:
                     st.audio(audio_fp, format="audio/mp3")
                 else:
                     st.info("Audio generation failed, please read the text.")
-
             except Exception as e:
                 st.error(f"Error processing your request: {e}")
 
