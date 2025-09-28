@@ -9,6 +9,5 @@ torch
 deep-translator
 speechrecognition
 streamlit-mic-recorder
-pydub
 gtts
 sentence-transformers
