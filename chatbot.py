@@ -28,7 +28,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for Farmer-Friendly Styling
+# Custom CSS for Clean UI
 st.markdown("""
 <style>
     .main-header {
@@ -60,17 +60,13 @@ st.markdown("""
         margin: 10px 0px;
         border: 2px solid #90EE90;
     }
-    .language-selector {
-        background: #e8f5e8;
-        padding: 15px;
-        border-radius: 10px;
-        border: 2px dashed #2E8B57;
-    }
-    .voice-section {
-        background: #f0f8ff;
+    .simple-card {
+        background: white;
         padding: 20px;
         border-radius: 15px;
-        border: 2px solid #87CEEB;
+        border: 2px solid #e0e0e0;
+        margin: 10px 0px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     .answer-box {
         background: linear-gradient(135deg, #e6ffe6, #ccffcc);
@@ -94,29 +90,6 @@ st.markdown("""
         transform: scale(1.05);
         box-shadow: 0 5px 15px rgba(46, 139, 87, 0.4);
     }
-    .simple-card {
-        background: white;
-        padding: 25px;
-        border-radius: 15px;
-        border: 2px solid #e0e0e0;
-        margin: 10px 0px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        text-align: center;
-    }
-    .language-icon {
-        font-size: 2.5rem;
-        margin-bottom: 10px;
-    }
-    .input-icon {
-        font-size: 2.5rem;
-        margin-bottom: 10px;
-    }
-    .option-title {
-        font-size: 1.3rem;
-        color: #2E8B57;
-        font-weight: bold;
-        margin-bottom: 15px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -124,7 +97,7 @@ st.markdown("""
 st.markdown('<div class="main-header">🌿 किसान मित्र - Farmer\'s Herb Assistant</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Your Digital Companion for Herb Farming & Regulations</div>', unsafe_allow_html=True)
 
-# Sidebar - User Manual
+# Sidebar - Simplified
 with st.sidebar:
     st.markdown("""
     <div style='text-align: center;'>
@@ -132,62 +105,36 @@ with st.sidebar:
         <hr style='border: 2px solid #2E8B57;'>
     </div>
     """, unsafe_allow_html=True)
-    
+
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
     st.subheader("🎯 How to Use")
     st.markdown("""
-    1. **Select Your Language** - Choose from 5 Indian languages
-    2. **Choose Input Method** - Type or Speak your question
-    3. **Ask Your Question** - Get instant answers about:
-       - 🌱 Herb cultivation techniques
-       - 🗺️ Regional suitability
-       - 🌧️ Climate requirements  
-       - 🌱 Soil preparation
+    1. **Select Your Language**
+    2. **Choose Input Method** - Text or Voice
+    3. **Ask Your Question** about:
+       - 🌱 Cultivation techniques
+       - 🌧️ Climate & soil requirements
        - 📜 Government regulations
        - 💰 Market information
     """)
     st.markdown('</div>', unsafe_allow_html=True)
-    
+
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
     st.subheader("🎤 Voice Input Guide")
     st.markdown("""
-    - Click **Start Recording** button
-    - Speak clearly in your chosen language
-    - Wait for **Stop Recording** to appear
+    - Click **Start Recording**
+    - Speak clearly
+    - Wait for **Stop Recording**
     - Your speech will be converted to text automatically
-    - Perfect for farmers who prefer speaking over typing
-    """)
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.subheader("🌿 Supported Herbs & Topics")
-    st.markdown("""
-    - **Medicinal Herbs**: Ashwagandha, Tulsi, Aloe Vera
-    - **Aromatic Herbs**: Mint, Lemongrass, Basil
-    - **Spice Herbs**: Turmeric, Ginger, Cumin
-    - **Regulations**: Organic certification, Export rules
-    - **Techniques**: Organic farming, Irrigation methods
-    """)
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.subheader("📞 Need Help?")
-    st.markdown("""
-    - Check microphone permissions for voice
-    - Speak clearly in a quiet environment
-    - For technical issues, contact support
-    - Always verify critical information with local experts
     """)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Main Content Area - Simplified Selection Section
+# Language & Input Method
+st.markdown("### 🌐 Choose Preferences")
 col1, col2 = st.columns([1, 1])
 
 with col1:
     st.markdown('<div class="simple-card">', unsafe_allow_html=True)
-    st.markdown('<div class="language-icon">🌐</div>', unsafe_allow_html=True)
-    st.markdown('<div class="option-title">Choose Your Language</div>', unsafe_allow_html=True)
-    
     languages = {
         "English": "en",
         "Hindi": "hi",
@@ -195,27 +142,12 @@ with col1:
         "Gujarati": "gu",
         "Tamil": "ta"
     }
-    user_lang = st.selectbox(
-        "Select your preferred language:",
-        list(languages.keys()),
-        index=0,
-        label_visibility="collapsed"
-    )
-    st.markdown(f"**Selected:** {user_lang} ✅")
+    user_lang = st.selectbox("Select Language:", list(languages.keys()), index=0)
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col2:
     st.markdown('<div class="simple-card">', unsafe_allow_html=True)
-    st.markdown('<div class="input-icon">💬</div>', unsafe_allow_html=True)
-    st.markdown('<div class="option-title">Choose Input Method</div>', unsafe_allow_html=True)
-    
-    mode = st.radio(
-        "How would you like to ask your question?",
-        ["Text", "Voice"],
-        horizontal=True,
-        label_visibility="collapsed"
-    )
-    st.markdown(f"**Selected:** {mode} ✅")
+    mode = st.radio("Choose Input Method:", ["Text", "Voice"], horizontal=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 # Question Input Section
@@ -224,62 +156,40 @@ st.markdown("### ❓ Ask Your Question")
 if mode == "Text":
     st.markdown('<div class="simple-card">', unsafe_allow_html=True)
     query_text = st.text_input(
-        "**Type your question about herbs, cultivation, or regulations:**",
-        placeholder="e.g., How to grow Ashwagandha in Maharashtra? What are the organic certification requirements?",
-        label_visibility="collapsed"
+        "Type your question:",
+        placeholder="e.g., How to grow Ashwagandha in Maharashtra?"
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
 elif mode == "Voice":
     st.markdown('<div class="simple-card">', unsafe_allow_html=True)
     st.markdown("#### 🎤 Speak Your Question")
-    st.markdown("Click below and speak clearly in your selected language")
-    
-    # Voice recorder
     audio_data = mic_recorder(
         start_prompt="🎙️ Start Recording",
         stop_prompt="⏹️ Stop Recording", 
         key="recorder",
         use_container_width=True
     )
-    
     if audio_data and "bytes" in audio_data:
-        with st.spinner("🔄 Processing your voice... Please wait"):
-            # Save mic recording temporarily (webm)
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmpfile:
-                tmpfile.write(audio_data["bytes"])
-                tmpfile_path = tmpfile.name
-
-            # Convert WebM → WAV safely using ffmpeg
-            wav_path = tmpfile_path.replace(".webm", ".wav")
-            try:
-                subprocess.run([
-                    "ffmpeg", "-y", "-i", tmpfile_path,
-                    "-ar", "16000", "-ac", "1",
-                    wav_path
-                ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            except subprocess.CalledProcessError as e:
-                st.error(f"❌ Audio conversion failed: {e.stderr.decode()}")
-                wav_path = None
-
-            # Recognize speech if conversion succeeded
-            if wav_path:
-                recognizer = sr.Recognizer()
-                with sr.AudioFile(wav_path) as source:
-                    audio = recognizer.record(source)
-                try:
-                    query_text = recognizer.recognize_google(audio, language=languages[user_lang])
-                    st.success(f"**🗣️ You said:** {query_text}")
-                except sr.UnknownValueError:
-                    st.error("❌ Sorry, I could not understand the audio. Please try speaking more clearly.")
-                except sr.RequestError as e:
-                    st.error(f"❌ Could not request results; {e}")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmpfile:
+            tmpfile.write(audio_data["bytes"])
+            tmpfile_path = tmpfile.name
+        wav_path = tmpfile_path.replace(".webm", ".wav")
+        subprocess.run(["ffmpeg", "-y", "-i", tmpfile_path, "-ar", "16000", "-ac", "1", wav_path], check=True)
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(wav_path) as source:
+            audio = recognizer.record(source)
+        try:
+            query_text = recognizer.recognize_google(audio, language=languages[user_lang])
+            st.success(f"**🗣️ You said:** {query_text}")
+        except:
+            query_text = ""
+            st.error("❌ Could not understand the audio. Try again.")
     else:
         query_text = ""
-        
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Load vector store (your existing code)
+# Load vector store
 @st.cache_resource
 def load_vector_store():
     loader = TextLoader("app/india_herbs_regions_soil_climate_rules.csv")
@@ -292,69 +202,51 @@ def load_vector_store():
 
 vectorstore = load_vector_store()
 
-# Initialize Groq LLM (your existing code)
+# Initialize Groq LLM
 llm = ChatGroq(model="llama-3.1-8b-instant", api_key=groq_api_key)
 
-# Create RAG pipeline (your existing code)
+# Create RAG pipeline
 qa = RetrievalQA.from_chain_type(
     llm=llm,
     retriever=vectorstore.as_retriever(),
     chain_type="stuff"
 )
 
-# Function to clean text (your existing code)
+# Clean text
 def clean_text(text: str) -> str:
     text = re.sub(r"[*_#`]", "", text)
     text = text.replace("•", " ").replace("-", " ")
-    text = text.replace(":", ": ")
     return text.strip()
 
-# Get Answer Button
+# Answer button
 col1, col2, col3 = st.columns([1,2,1])
 with col2:
     get_answer_btn = st.button("🌱 Get Expert Answer", use_container_width=True)
 
 # Process Query
 if get_answer_btn:
-    if not query_text or query_text.strip() == "":
+    if not query_text.strip():
         st.warning("⚠️ Please enter or speak a question first.")
     else:
-        with st.spinner(f"🔍 Searching for the best answer in {user_lang}..."):
-            try:
-                # Display user's question
-                st.markdown(f'<div class="simple-card"><h4>👤 Your Question:</h4><p>"{query_text}"</p></div>', unsafe_allow_html=True)
-                
-                # Translate query → English
-                with st.spinner("🔄 Translating your question..."):
-                    query_in_english = GoogleTranslator(source='auto', target='en').translate(query_text)
+        st.markdown(f'<div class="simple-card"><h4>👤 Your Question:</h4><p>"{query_text}"</p></div>', unsafe_allow_html=True)
 
-                # Get answer
-                with st.spinner("🤔 Analyzing with expert knowledge..."):
-                    answer = qa.run(query_in_english)
+        query_in_english = GoogleTranslator(source='auto', target='en').translate(query_text)
+        answer = qa.run(query_in_english)
+        answer_translated = GoogleTranslator(source='en', target=languages[user_lang]).translate(answer)
+        answer_clean = clean_text(answer_translated)
 
-                # Translate back to user language
-                with st.spinner("🔄 Translating answer to your language..."):
-                    answer_translated = GoogleTranslator(source='en', target=languages[user_lang]).translate(answer)
-
-                # Clean & show text
-                answer_clean = clean_text(answer_translated)
-                
-                # Display answer in attractive box
-                st.markdown(f"""
-                <div class="answer-box">
-                    <h3 style='color: #2E8B57; text-align: center;'>🌿 Expert Answer</h3>
-                    <hr style='border: 1px solid #90EE90;'>
-                    <div style='font-size: 1.1rem; line-height: 1.6; color: #2d5016;'>
-                        {answer_clean}
-                    </div>
-                    <div style='text-align: center; margin-top: 15px;'>
-                        <small style='color: #556B2F;'>💡 Powered by AI Agriculture Expert</small>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-            except Exception as e:
-                st.error(f"❌ Error processing your request: {str(e)}")
+        st.markdown(f"""
+        <div class="answer-box">
+            <h3 style='color: #2E8B57; text-align: center;'>🌿 Expert Answer</h3>
+            <hr style='border: 1px solid #90EE90;'>
+            <div style='font-size: 1.1rem; line-height: 1.6; color: #2d5016;'>
+                {answer_clean}
+            </div>
+            <div style='text-align: center; margin-top: 15px;'>
+                <small style='color: #556B2F;'>💡 Powered by AI Agriculture Expert</small>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # Footer
 st.markdown("---")
