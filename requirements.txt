@@ -9,5 +9,6 @@ torch
 deep-translator
 speechrecognition
 streamlit-mic-recorder
-gtts
+TTS
+soundfile
 sentence-transformers
