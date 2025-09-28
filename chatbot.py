@@ -1,25 +1,27 @@
 import os
 import re
-import io
+import tempfile
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.chains import RetrievalQA
-from langchain_groq import ChatGroq  # Groq LLM
+from langchain_groq import ChatGroq
 
 # Voice + Translation
-from gtts import gTTS
+from elevenlabs.client import ElevenLabs
+from elevenlabs import save
 from deep_translator import GoogleTranslator
+import speech_recognition as sr
 from streamlit_mic_recorder import mic_recorder
 from pydub import AudioSegment
-import speech_recognition as sr
 
 # Load environment variables
 load_dotenv()
 groq_api_key = os.getenv("GROQ_API_KEY")
+elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
 
 # Streamlit UI
 st.set_page_config(page_title="Farmer's Herb Chatbot", page_icon="🌿")
@@ -34,6 +36,15 @@ languages = {
     "Tamil": "ta"
 }
 user_lang = st.selectbox("🌐 Select your language:", list(languages.keys()), index=0)
+
+# 🔊 Voice mapping (replace with your actual voice IDs from ElevenLabs)
+voice_map = {
+    "English": "21m00Tcm4TlvDq8ikWAM",   # Rachel
+    "Hindi": "1qEiC6qsybMkmnNdVMbK",      # e.g., Akash
+    "Marathi": "1qEiC6qsybMkmnNdVMbK",  # Indian-accent male/female
+    "Gujarati": "1qEiC6qsybMkmnNdVMbK",
+    "Tamil": "gqFUMFHCD2nbbcYVtPGB"
+}
 
 # Load vector store
 @st.cache_resource
@@ -58,27 +69,12 @@ qa = RetrievalQA.from_chain_type(
     chain_type="stuff"
 )
 
-# Function to clean text for TTS
+# Function to clean text before TTS
 def clean_text_for_tts(text: str) -> str:
-    text = re.sub(r"[*_#`]", "", text)
+    text = re.sub(r"[*_#`]", "", text)  # remove markdown chars
     text = text.replace("•", " ").replace("-", " ")
     text = text.replace(":", ": ")
     return text.strip()
-
-# Function to generate audio using gTTS
-def text_to_speech_gtts(text: str, lang_code: str):
-    try:
-        cleaned_text = clean_text_for_tts(text)
-        if not cleaned_text.strip():
-            return None
-        tts = gTTS(text=cleaned_text, lang=lang_code, slow=False)
-        audio_fp = io.BytesIO()
-        tts.write_to_fp(audio_fp)
-        audio_fp.seek(0)
-        return audio_fp
-    except Exception as e:
-        st.error(f"Error generating audio: {e}")
-        return None
 
 # Input method
 mode = st.radio("Choose Input Method:", ["Text", "Voice"])
@@ -91,27 +87,28 @@ elif mode == "Voice":
     st.write("🎙️ Speak your query")
     audio_data = mic_recorder(start_prompt="Start Recording", stop_prompt="Stop Recording", key="recorder")
 
-    if audio_data and "bytes" in audio_data and audio_data["bytes"]:
+    if audio_data and "bytes" in audio_data:
+        # Save mic recording temporarily (webm)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmpfile:
+            tmpfile.write(audio_data["bytes"])
+            tmpfile_path = tmpfile.name
+
+        # Convert WebM → WAV
+        wav_path = tmpfile_path.replace(".webm", ".wav")
+        sound = AudioSegment.from_file(tmpfile_path, format="webm")
+        sound.export(wav_path, format="wav")
+
+        # Recognize speech
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(wav_path) as source:
+            audio = recognizer.record(source)
         try:
-            # Convert bytes to AudioSegment in-memory
-            audio_fp = io.BytesIO(audio_data["bytes"])
-            sound = AudioSegment.from_file(audio_fp, format="webm")
-
-            # Export to WAV in-memory
-            wav_fp = io.BytesIO()
-            sound.export(wav_fp, format="wav")
-            wav_fp.seek(0)
-
-            # Recognize speech
-            recognizer = sr.Recognizer()
-            with sr.AudioFile(wav_fp) as source:
-                audio = recognizer.record(source)
             query_text = recognizer.recognize_google(audio, language=languages[user_lang])
             st.write("🗣️ You said:", query_text)
-        except Exception as e:
-            st.error(f"❌ Audio processing failed: {e}")
-    else:
-        st.warning("No audio recorded. Please try again.")
+        except sr.UnknownValueError:
+            st.error("❌ Sorry, I could not understand the audio.")
+        except sr.RequestError as e:
+            st.error(f"❌ Could not request results; {e}")
 
 # Run query
 if st.button("Get Answer"):
@@ -119,28 +116,37 @@ if st.button("Get Answer"):
         st.warning("Please enter or speak a question.")
     else:
         with st.spinner("Thinking..."):
-            try:
-                # Translate query → English
-                query_in_english = GoogleTranslator(source='auto', target='en').translate(query_text)
+            # Translate query → English
+            query_in_english = GoogleTranslator(source='auto', target='en').translate(query_text)
 
-                # Get answer from Groq LLM
-                answer = qa.run(query_in_english)
+            # Get answer
+            answer = qa.run(query_in_english)
 
-                # Translate back to user language
-                answer_translated = GoogleTranslator(source='en', target=languages[user_lang]).translate(answer)
+            # Translate back to user language
+            answer_translated = GoogleTranslator(source='en', target=languages[user_lang]).translate(answer)
 
-                # Show text answer
-                st.subheader("📝 Answer:")
-                st.success(answer_translated)
+            # Show text
+            st.success(answer_translated)
 
-                # Generate audio response
-                st.subheader("🔊 Audio Response:")
-                audio_fp = text_to_speech_gtts(answer_translated, languages[user_lang])
-                if audio_fp:
-                    st.audio(audio_fp, format="audio/mp3")
-                else:
-                    st.info("Audio generation failed, please read the text.")
-            except Exception as e:
-                st.error(f"Error processing your request: {e}")
+            # Prepare for TTS
+            tts_text = clean_text_for_tts(answer_translated)
+
+            # ElevenLabs TTS
+            client = ElevenLabs(api_key=elevenlabs_api_key)
+
+            # Pick voice for the chosen language
+            selected_voice = voice_map.get(user_lang, "21m00Tcm4TlvDq8ikWAM")  # fallback Rachel
+
+            audio = client.text_to_speech.convert(
+                text=tts_text,
+                voice_id=selected_voice,
+                model_id="eleven_multilingual_v2",
+                output_format="mp3_44100_128",
+            )
+
+            # Save & Play
+            audio_file = "response.mp3"
+            save(audio, audio_file)
+            st.audio(audio_file, format="audio/mp3")
 
 
