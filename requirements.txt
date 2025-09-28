@@ -8,4 +8,5 @@ gTTS
 deep-translator
 SpeechRecognition
 pydub
-streamlit-webrtc
+streamlit-mic-recorder
+langchain-groq
