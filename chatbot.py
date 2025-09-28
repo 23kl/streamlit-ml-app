@@ -1,6 +1,7 @@
 import os
 import re
 import tempfile
+import subprocess
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader
@@ -16,7 +17,6 @@ from elevenlabs import save
 from deep_translator import GoogleTranslator
 import speech_recognition as sr
 from streamlit_mic_recorder import mic_recorder
-from pydub import AudioSegment
 
 # Load environment variables
 load_dotenv()
@@ -37,11 +37,11 @@ languages = {
 }
 user_lang = st.selectbox("🌐 Select your language:", list(languages.keys()), index=0)
 
-# 🔊 Voice mapping (replace with your actual voice IDs from ElevenLabs)
+# Voice mapping (replace with your actual voice IDs from ElevenLabs)
 voice_map = {
-    "English": "21m00Tcm4TlvDq8ikWAM",   # Rachel
-    "Hindi": "1qEiC6qsybMkmnNdVMbK",      # e.g., Akash
-    "Marathi": "1qEiC6qsybMkmnNdVMbK",  # Indian-accent male/female
+    "English": "21m00Tcm4TlvDq8ikWAM",  
+    "Hindi": "1qEiC6qsybMkmnNdVMbK",    
+    "Marathi": "1qEiC6qsybMkmnNdVMbK",  
     "Gujarati": "1qEiC6qsybMkmnNdVMbK",
     "Tamil": "gqFUMFHCD2nbbcYVtPGB"
 }
@@ -71,7 +71,7 @@ qa = RetrievalQA.from_chain_type(
 
 # Function to clean text before TTS
 def clean_text_for_tts(text: str) -> str:
-    text = re.sub(r"[*_#`]", "", text)  # remove markdown chars
+    text = re.sub(r"[*_#`]", "", text)
     text = text.replace("•", " ").replace("-", " ")
     text = text.replace(":", ": ")
     return text.strip()
@@ -93,22 +93,30 @@ elif mode == "Voice":
             tmpfile.write(audio_data["bytes"])
             tmpfile_path = tmpfile.name
 
-        # Convert WebM → WAV
+        # Convert WebM → WAV safely using ffmpeg
         wav_path = tmpfile_path.replace(".webm", ".wav")
-        sound = AudioSegment.from_file(tmpfile_path, format="webm")
-        sound.export(wav_path, format="wav")
-
-        # Recognize speech
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(wav_path) as source:
-            audio = recognizer.record(source)
         try:
-            query_text = recognizer.recognize_google(audio, language=languages[user_lang])
-            st.write("🗣️ You said:", query_text)
-        except sr.UnknownValueError:
-            st.error("❌ Sorry, I could not understand the audio.")
-        except sr.RequestError as e:
-            st.error(f"❌ Could not request results; {e}")
+            subprocess.run([
+                "ffmpeg", "-y", "-i", tmpfile_path,
+                "-ar", "16000", "-ac", "1",
+                wav_path
+            ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except subprocess.CalledProcessError as e:
+            st.error(f"❌ Audio conversion failed: {e.stderr.decode()}")
+            wav_path = None
+
+        # Recognize speech if conversion succeeded
+        if wav_path:
+            recognizer = sr.Recognizer()
+            with sr.AudioFile(wav_path) as source:
+                audio = recognizer.record(source)
+            try:
+                query_text = recognizer.recognize_google(audio, language=languages[user_lang])
+                st.write("🗣️ You said:", query_text)
+            except sr.UnknownValueError:
+                st.error("❌ Sorry, I could not understand the audio.")
+            except sr.RequestError as e:
+                st.error(f"❌ Could not request results; {e}")
 
 # Run query
 if st.button("Get Answer"):
@@ -133,8 +141,6 @@ if st.button("Get Answer"):
 
             # ElevenLabs TTS
             client = ElevenLabs(api_key=elevenlabs_api_key)
-
-            # Pick voice for the chosen language
             selected_voice = voice_map.get(user_lang, "21m00Tcm4TlvDq8ikWAM")  # fallback Rachel
 
             audio = client.text_to_speech.convert(
