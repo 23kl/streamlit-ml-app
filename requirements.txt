@@ -11,3 +11,4 @@ speechrecognition
 streamlit-mic-recorder
 pydub
 gtts
+sentence-transformers
