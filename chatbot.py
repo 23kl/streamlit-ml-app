@@ -120,15 +120,18 @@ if st.button("Get Answer"):
             # Clean text for TTS
             tts_text = clean_text_for_tts(answer_translated)
 
-            # Split into chunks if long
+            # Split long text into chunks (<=200 chars) for gTTS
             max_chunk_size = 200
             tts_chunks = [tts_text[i:i+max_chunk_size] for i in range(0, len(tts_text), max_chunk_size)]
 
             # Combine all audio into one BytesIO
             audio_bytes = BytesIO()
             for chunk in tts_chunks:
-                tts = gTTS(text=chunk, lang=languages[user_lang])
-                tts.write_to_fp(audio_bytes)
+                try:
+                    tts = gTTS(text=chunk, lang=languages[user_lang])
+                    tts.write_to_fp(audio_bytes)
+                except Exception as e:
+                    st.error(f"⚠️ TTS generation failed: {e}")
 
             # Reset pointer to start
             audio_bytes.seek(0)
