@@ -1,7 +1,8 @@
 import os
 import re
 from io import BytesIO
-from pathlib import Path
+import numpy as np
+import soundfile as sf
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader
@@ -10,12 +11,10 @@ from langchain_community.vectorstores import FAISS
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.chains import RetrievalQA
 from langchain_groq import ChatGroq
-
-# Voice + Translation
 from deep_translator import GoogleTranslator
 import speech_recognition as sr
 from streamlit_mic_recorder import mic_recorder
-from gtts import gTTS
+from TTS.api import TTS
 
 # Load environment variables
 load_dotenv()
@@ -38,8 +37,8 @@ user_lang = st.selectbox("🌐 Select your language:", list(languages.keys()), i
 # Load vector store
 @st.cache_resource
 def load_vector_store():
-    data_file = Path("app") / "india_herbs_regions_soil_climate_rules.csv"
-    loader = TextLoader(str(data_file))
+    data_file = "india_herbs_regions_soil_climate_rules.csv"
+    loader = TextLoader(data_file)
     documents = loader.load()
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = splitter.split_documents(documents)
@@ -59,12 +58,23 @@ qa = RetrievalQA.from_chain_type(
     chain_type="stuff"
 )
 
-# Function to clean text before TTS
+# Initialize multilingual Coqui TTS
+tts_model = TTS(model_name="coqui/xtts_v2")
+
+# Function to clean text for TTS
 def clean_text_for_tts(text: str) -> str:
     text = re.sub(r"[*_#`]", "", text)
     text = text.replace("•", " ").replace("-", " ")
     text = text.replace(":", ": ")
     return text.strip()
+
+# Convert text to audio BytesIO using Coqui TTS
+def tts_to_bytes(text: str) -> BytesIO:
+    wav = tts_model.tts(text)
+    audio_bytes = BytesIO()
+    sf.write(audio_bytes, np.array(wav), tts_model.synthesizer.output_sample_rate, format='WAV')
+    audio_bytes.seek(0)
+    return audio_bytes
 
 # Input method
 mode = st.radio("Choose Input Method:", ["Text", "Voice"])
@@ -120,22 +130,17 @@ if st.button("Get Answer"):
             # Clean text for TTS
             tts_text = clean_text_for_tts(answer_translated)
 
-            # Split long text into chunks (<=200 chars) for gTTS
+            # Split long text into chunks
             max_chunk_size = 200
-            tts_chunks = [tts_text[i:i+max_chunk_size] for i in range(0, len(tts_text), max_chunk_size)]
+            chunks = [tts_text[i:i+max_chunk_size] for i in range(0, len(tts_text), max_chunk_size)]
 
-            # Combine all audio into one BytesIO
-            audio_bytes = BytesIO()
-            for chunk in tts_chunks:
-                try:
-                    tts = gTTS(text=chunk, lang=languages[user_lang])
-                    tts.write_to_fp(audio_bytes)
-                except Exception as e:
-                    st.error(f"⚠️ TTS generation failed: {e}")
+            # Combine all chunks into one BytesIO
+            combined_audio = BytesIO()
+            for chunk in chunks:
+                audio_chunk = tts_to_bytes(chunk)
+                combined_audio.write(audio_chunk.read())
 
-            # Reset pointer to start
-            audio_bytes.seek(0)
+            combined_audio.seek(0)
+            st.audio(combined_audio, format="audio/wav", start_time=0)
 
-            # Play audio (works on any device)
-            st.audio(audio_bytes, format="audio/mp3", start_time=0)
 
