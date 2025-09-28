@@ -94,6 +94,29 @@ st.markdown("""
         transform: scale(1.05);
         box-shadow: 0 5px 15px rgba(46, 139, 87, 0.4);
     }
+    .simple-card {
+        background: white;
+        padding: 25px;
+        border-radius: 15px;
+        border: 2px solid #e0e0e0;
+        margin: 10px 0px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+    .language-icon {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+    }
+    .input-icon {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+    }
+    .option-title {
+        font-size: 1.3rem;
+        color: #2E8B57;
+        font-weight: bold;
+        margin-bottom: 15px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -157,16 +180,14 @@ with st.sidebar:
     """)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Main Content Area
+# Main Content Area - Simplified Selection Section
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.markdown('<div class="farmer-card">', unsafe_allow_html=True)
-    st.markdown("### 🌐 Choose Your Language")
-    st.markdown("Select your preferred language for both questions and answers")
+    st.markdown('<div class="simple-card">', unsafe_allow_html=True)
+    st.markdown('<div class="language-icon">🌐</div>', unsafe_allow_html=True)
+    st.markdown('<div class="option-title">Choose Your Language</div>', unsafe_allow_html=True)
     
-    # Language selector with enhanced styling
-    st.markdown('<div class="language-selector">', unsafe_allow_html=True)
     languages = {
         "English": "en",
         "Hindi": "hi",
@@ -175,34 +196,33 @@ with col1:
         "Tamil": "ta"
     }
     user_lang = st.selectbox(
-        "**Select Language:**",
+        "Select your preferred language:",
         list(languages.keys()),
         index=0,
         label_visibility="collapsed"
     )
     st.markdown(f"**Selected:** {user_lang} ✅")
     st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
 with col2:
-    st.markdown('<div class="farmer-card">', unsafe_allow_html=True)
-    st.markdown("### 💬 Choose Input Method")
-    st.markdown("Ask your question by typing or speaking")
+    st.markdown('<div class="simple-card">', unsafe_allow_html=True)
+    st.markdown('<div class="input-icon">💬</div>', unsafe_allow_html=True)
+    st.markdown('<div class="option-title">Choose Input Method</div>', unsafe_allow_html=True)
     
-    # Input method selection
     mode = st.radio(
-        "**How would you like to ask?**",
+        "How would you like to ask your question?",
         ["Text", "Voice"],
         horizontal=True,
         label_visibility="collapsed"
     )
+    st.markdown(f"**Selected:** {mode} ✅")
     st.markdown('</div>', unsafe_allow_html=True)
 
 # Question Input Section
 st.markdown("### ❓ Ask Your Question")
 
 if mode == "Text":
-    st.markdown('<div class="farmer-card">', unsafe_allow_html=True)
+    st.markdown('<div class="simple-card">', unsafe_allow_html=True)
     query_text = st.text_input(
         "**Type your question about herbs, cultivation, or regulations:**",
         placeholder="e.g., How to grow Ashwagandha in Maharashtra? What are the organic certification requirements?",
@@ -211,9 +231,9 @@ if mode == "Text":
     st.markdown('</div>', unsafe_allow_html=True)
 
 elif mode == "Voice":
-    st.markdown('<div class="voice-section">', unsafe_allow_html=True)
-    st.markdown("#### 🎤 Voice Input")
-    st.markdown("Click the record button below and speak your question in your selected language")
+    st.markdown('<div class="simple-card">', unsafe_allow_html=True)
+    st.markdown("#### 🎤 Speak Your Question")
+    st.markdown("Click below and speak clearly in your selected language")
     
     # Voice recorder
     audio_data = mic_recorder(
@@ -302,7 +322,7 @@ if get_answer_btn:
         with st.spinner(f"🔍 Searching for the best answer in {user_lang}..."):
             try:
                 # Display user's question
-                st.markdown(f'<div class="farmer-card"><h4>👤 Your Question:</h4><p>"{query_text}"</p></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="simple-card"><h4>👤 Your Question:</h4><p>"{query_text}"</p></div>', unsafe_allow_html=True)
                 
                 # Translate query → English
                 with st.spinner("🔄 Translating your question..."):
