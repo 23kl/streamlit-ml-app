@@ -117,14 +117,14 @@ if st.button("Get Answer"):
 
             # Prepare for TTS
             tts_text = clean_text_for_tts(answer_translated)
-
-            # ✅ Google TTS instead of ElevenLabs
             tts = gTTS(text=tts_text, lang=languages[user_lang])
-            audio_file = "response.mp3"
-            tts.save(audio_file)
+
+            # ✅ Save to temp file (fix for Streamlit Cloud audio error)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
+                tts.save(tmpfile.name)
+                audio_file = tmpfile.name
 
             # Play audio
             st.audio(audio_file, format="audio/mp3")
-
 
 
