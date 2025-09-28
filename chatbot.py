@@ -1,7 +1,7 @@
 import os
 import re
 import tempfile
-from io import BytesIO
+from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader
@@ -38,7 +38,8 @@ user_lang = st.selectbox("🌐 Select your language:", list(languages.keys()), i
 # Load vector store
 @st.cache_resource
 def load_vector_store():
-    loader = TextLoader("app/india_herbs_regions_soil_climate_rules.csv")
+    data_file = Path("app") / "india_herbs_regions_soil_climate_rules.csv"
+    loader = TextLoader(str(data_file))
     documents = loader.load()
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = splitter.split_documents(documents)
@@ -115,21 +116,16 @@ if st.button("Get Answer"):
             # Show text
             st.success(answer_translated)
 
-            # Split long text for TTS if needed
-            tts_chunks = []
-            max_chunk_size = 200  # gTTS can fail on very long text
-            text_to_process = clean_text_for_tts(answer_translated)
-            for i in range(0, len(text_to_process), max_chunk_size):
-                tts_chunks.append(text_to_process[i:i+max_chunk_size])
+            # Clean text for TTS
+            tts_text = clean_text_for_tts(answer_translated)
 
-            # Combine audio into a single BytesIO
-            combined_audio = BytesIO()
-            for chunk in tts_chunks:
-                tts = gTTS(text=chunk, lang=languages[user_lang])
-                tts.write_to_fp(combined_audio)
-
-            combined_audio.seek(0)  # Reset pointer
+            # Save TTS to temporary mp3 file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
+                tts = gTTS(text=tts_text, lang=languages[user_lang])
+                tts.save(tmpfile.name)
+                mp3_path = tmpfile.name
 
             # Play audio
-            st.audio(combined_audio, format="audio/mp3", start_time=0)
+            st.audio(mp3_path, format="audio/mp3", start_time=0)
+
 
