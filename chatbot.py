@@ -1,9 +1,9 @@
 import os
 import re
-import io
+import tempfile
 import streamlit as st
 from dotenv import load_dotenv
-from langchain_community.document_loaders import CSVLoader, TextLoader
+from langchain_community.document_loaders import TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain.embeddings import HuggingFaceEmbeddings
@@ -13,9 +13,10 @@ from langchain_groq import ChatGroq
 # Voice + Translation
 from gtts import gTTS
 from deep_translator import GoogleTranslator
-from pydub import AudioSegment
 import speech_recognition as sr
-from streamlit_webrtc import webrtc_streamer, WebRtcMode, ClientSettings
+from streamlit_mic_recorder import mic_recorder
+from pydub import AudioSegment
+import io
 
 # Load environment variables
 load_dotenv()
@@ -23,7 +24,7 @@ groq_api_key = os.getenv("GROQ_API_KEY")
 
 # Streamlit UI
 st.set_page_config(page_title="Farmer's Herb Chatbot", page_icon="🌿")
-st.title("🌿 Farmer's Herb & Regulation Chatbot")
+st.title("🌿 Farmer’s Herb & Regulation Chatbot")
 
 # Language selector
 languages = {
@@ -38,52 +39,35 @@ user_lang = st.selectbox("🌐 Select your language:", list(languages.keys()), i
 # Load vector store
 @st.cache_resource
 def load_vector_store():
-    try:
-        possible_paths = [
-            "india_herbs_regions_soil_climate_rules.csv",
-            "app/india_herbs_regions_soil_climate_rules.csv",
-            "data/india_herbs_regions_soil_climate_rules.csv",
-            "./india_herbs_regions_soil_climate_rules.csv"
-        ]
-        file_path = next((p for p in possible_paths if os.path.exists(p)), None)
-        if not file_path:
-            st.error("❌ Data file not found.")
-            return None
+    loader = TextLoader("app/india_herbs_regions_soil_climate_rules.csv")
+    documents = loader.load()
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    chunks = splitter.split_documents(documents)
+    embeddings = HuggingFaceEmbeddings()
+    vectorstore = FAISS.from_documents(chunks, embeddings)
+    return vectorstore
 
-        # Load CSV first, fallback to text
-        try:
-            loader = CSVLoader(file_path=file_path)
-            documents = loader.load()
-        except:
-            loader = TextLoader(file_path=file_path)
-            documents = loader.load()
-
-        splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-        chunks = splitter.split_documents(documents)
-        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-        vectorstore = FAISS.from_documents(chunks, embeddings)
-        return vectorstore
-
-    except Exception as e:
-        st.error(f"❌ Error loading documents: {str(e)}")
-        return None
-
-# Initialize RAG pipeline
 vectorstore = load_vector_store()
-if vectorstore is None:
-    st.stop()
 
+# Initialize Groq LLM
 llm = ChatGroq(model="llama-3.1-8b-instant", api_key=groq_api_key)
-qa = RetrievalQA.from_chain_type(llm=llm, retriever=vectorstore.as_retriever(), chain_type="stuff")
 
-# Clean text for TTS
+# Create RAG pipeline
+qa = RetrievalQA.from_chain_type(
+    llm=llm,
+    retriever=vectorstore.as_retriever(),
+    chain_type="stuff"
+)
+
+# Function to clean text before TTS
 def clean_text_for_tts(text: str) -> str:
     text = re.sub(r"[*_#`]", "", text)
-    text = text.replace("•", " ").replace("-", " ").replace(":", ": ")
+    text = text.replace("•", " ").replace("-", " ")
+    text = text.replace(":", ": ")
     return text.strip()
 
-# Convert text to in-memory audio
-def text_to_speech_base64(text, lang_code="en"):
+# Function to generate audio using gTTS
+def text_to_speech_gtts(text: str, lang_code: str):
     try:
         cleaned_text = clean_text_for_tts(text)
         if not cleaned_text.strip():
@@ -94,45 +78,10 @@ def text_to_speech_base64(text, lang_code="en"):
         audio_fp.seek(0)
         return audio_fp
     except Exception as e:
-        st.error(f"TTS Error: {e}")
+        st.error(f"Error generating audio: {e}")
         return None
 
-# Browser-based voice recording using WebRTC
-def record_audio_webrtc():
-    webrtc_ctx = webrtc_streamer(
-        key="voice-input",
-        mode=WebRtcMode.RECVONLY,
-        client_settings=ClientSettings(
-            media_stream_constraints={"audio": True, "video": False}
-        ),
-        async_processing=False
-    )
-    if webrtc_ctx.audio_receiver:
-        frames = webrtc_ctx.audio_receiver.get_frames(timeout=1)
-        if frames:
-            audio_bytes = b"".join([f.to_bytes() for f in frames])
-            audio_segment = AudioSegment.from_raw(io.BytesIO(audio_bytes), sample_width=2, frame_rate=44100, channels=1)
-            audio_fp = io.BytesIO()
-            audio_segment.export(audio_fp, format="wav")
-            audio_fp.seek(0)
-            return audio_fp
-    return None
-
-# Transcribe audio using Google Speech Recognition
-def transcribe_audio(audio_fp, language):
-    recognizer = sr.Recognizer()
-    try:
-        with sr.AudioFile(audio_fp) as source:
-            audio = recognizer.record(source)
-        return recognizer.recognize_google(audio, language=language)
-    except sr.UnknownValueError:
-        st.error("❌ Could not understand the audio.")
-        return None
-    except sr.RequestError as e:
-        st.error(f"❌ Speech recognition error: {e}")
-        return None
-
-# Input mode
+# Input method
 mode = st.radio("Choose Input Method:", ["Text", "Voice"])
 query_text = ""
 
@@ -140,47 +89,55 @@ if mode == "Text":
     query_text = st.text_input("Ask your question about herbs & regulations:")
 
 elif mode == "Voice":
-    st.write("🎤 Voice Input")
-    if st.button("🎙️ Start Recording", key="record_btn_webrtc"):
-        with st.spinner("Recording... Speak now!"):
-            audio_fp = record_audio_webrtc()
-        if audio_fp:
-            query_text = transcribe_audio(audio_fp, languages[user_lang])
-            if query_text:
-                st.success(f"🗣️ You said: **{query_text}**")
+    st.write("🎙️ Speak your query")
+    audio_data = mic_recorder(start_prompt="Start Recording", stop_prompt="Stop Recording", key="recorder")
+
+    if audio_data and "bytes" in audio_data:
+        # Save mic recording temporarily (webm)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmpfile:
+            tmpfile.write(audio_data["bytes"])
+            tmpfile_path = tmpfile.name
+
+        # Convert WebM → WAV
+        wav_path = tmpfile_path.replace(".webm", ".wav")
+        sound = AudioSegment.from_file(tmpfile_path, format="webm")
+        sound.export(wav_path, format="wav")
+
+        # Recognize speech
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(wav_path) as source:
+            audio = recognizer.record(source)
+        try:
+            query_text = recognizer.recognize_google(audio, language=languages[user_lang])
+            st.write("🗣️ You said:", query_text)
+        except sr.UnknownValueError:
+            st.error("❌ Sorry, I could not understand the audio.")
+        except sr.RequestError as e:
+            st.error(f"❌ Could not request results; {e}")
 
 # Run query
-if st.button("Get Answer", key="get_answer"):
-    if not query_text.strip():
+if st.button("Get Answer"):
+    if query_text.strip() == "":
         st.warning("Please enter or speak a question.")
     else:
         with st.spinner("Thinking..."):
             try:
-                st.write(f"**Your question:** {query_text}")
-
                 # Translate query → English
-                if user_lang != "English":
-                    query_in_english = GoogleTranslator(source='auto', target='en').translate(query_text)
-                    st.write(f"**Translated question:** {query_in_english}")
-                else:
-                    query_in_english = query_text
+                query_in_english = GoogleTranslator(source='auto', target='en').translate(query_text)
 
                 # Get answer
                 answer = qa.run(query_in_english)
 
-                # Translate answer back
-                if user_lang != "English":
-                    answer_translated = GoogleTranslator(source='en', target=languages[user_lang]).translate(answer)
-                else:
-                    answer_translated = answer
+                # Translate back to user language
+                answer_translated = GoogleTranslator(source='en', target=languages[user_lang]).translate(answer)
 
-                # Show answer
+                # Show text
                 st.subheader("📝 Answer:")
                 st.success(answer_translated)
 
-                # Generate audio response
+                # Generate audio
                 st.subheader("🔊 Audio Response:")
-                audio_fp = text_to_speech_base64(answer_translated, languages[user_lang])
+                audio_fp = text_to_speech_gtts(answer_translated, languages[user_lang])
                 if audio_fp:
                     st.audio(audio_fp, format="audio/mp3")
                 else:
@@ -188,26 +145,4 @@ if st.button("Get Answer", key="get_answer"):
 
             except Exception as e:
                 st.error(f"Error processing your request: {e}")
-
-# Sidebar info
-st.sidebar.markdown("""
-### 💡 How to use:
-1. Select language
-2. Choose input method: Text or Voice
-3. Ask questions about:
-   - Herb cultivation
-   - Regional suitability
-   - Soil requirements
-   - Climate conditions
-   - Government regulations
-   - Farming techniques
-
-### 🎤 Voice Input Tips:
-- Click "Start Recording"
-- Speak clearly in quiet environment
-- Allow microphone permissions
-
-### 🌿 Supported Languages:
-- English, Hindi, Marathi, Gujarati, Tamil
-""")
 
