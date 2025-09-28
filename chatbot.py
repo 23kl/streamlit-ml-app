@@ -1,6 +1,7 @@
 import os
 import re
 import tempfile
+from io import BytesIO
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader
@@ -41,7 +42,7 @@ def load_vector_store():
     documents = loader.load()
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = splitter.split_documents(documents)
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")  # ✅ small & fast
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")  # ✅ lightweight model
     vectorstore = FAISS.from_documents(chunks, embeddings)
     return vectorstore
 
@@ -77,7 +78,7 @@ elif mode == "Voice":
         start_prompt="Start Recording",
         stop_prompt="Stop Recording",
         key="recorder",
-        format="wav"   # ✅ directly record in wav, no ffmpeg/pydub needed
+        format="wav"   # ✅ directly record as wav, no ffmpeg needed
     )
 
     if audio_data and "bytes" in audio_data:
@@ -119,12 +120,11 @@ if st.button("Get Answer"):
             tts_text = clean_text_for_tts(answer_translated)
             tts = gTTS(text=tts_text, lang=languages[user_lang])
 
-            # ✅ Save to temp file (fix for Streamlit Cloud audio error)
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
-                tts.save(tmpfile.name)
-                audio_file = tmpfile.name
+            # ✅ Save audio to memory instead of file (fix for Streamlit Cloud)
+            audio_bytes = BytesIO()
+            tts.write_to_fp(audio_bytes)
+            audio_bytes.seek(0)
 
             # Play audio
-            st.audio(audio_file, format="audio/mp3")
-
+            st.audio(audio_bytes, format="audio/mp3")
 
