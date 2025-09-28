@@ -1,13 +1,12 @@
 import os
 import re
 import io
-import tempfile
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.chains import RetrievalQA
 from langchain_groq import ChatGroq  # Groq LLM
 
@@ -94,11 +93,11 @@ elif mode == "Voice":
 
     if audio_data and "bytes" in audio_data and audio_data["bytes"]:
         try:
-            # Convert bytes to AudioSegment
+            # Convert bytes to AudioSegment in-memory
             audio_fp = io.BytesIO(audio_data["bytes"])
             sound = AudioSegment.from_file(audio_fp, format="webm")
 
-            # Export to WAV in memory
+            # Export to WAV in-memory
             wav_fp = io.BytesIO()
             sound.export(wav_fp, format="wav")
             wav_fp.seek(0)
@@ -143,4 +142,5 @@ if st.button("Get Answer"):
                     st.info("Audio generation failed, please read the text.")
             except Exception as e:
                 st.error(f"Error processing your request: {e}")
+
 
