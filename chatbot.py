@@ -15,7 +15,7 @@ from langchain_groq import ChatGroq
 from deep_translator import GoogleTranslator
 import speech_recognition as sr
 from streamlit_mic_recorder import mic_recorder
-from gtts import gTTS  # ✅ Google TTS
+from gtts import gTTS
 
 # Load environment variables
 load_dotenv()
@@ -42,7 +42,7 @@ def load_vector_store():
     documents = loader.load()
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = splitter.split_documents(documents)
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")  # ✅ lightweight model
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(chunks, embeddings)
     return vectorstore
 
@@ -60,7 +60,7 @@ qa = RetrievalQA.from_chain_type(
 
 # Function to clean text before TTS
 def clean_text_for_tts(text: str) -> str:
-    text = re.sub(r"[*_#`]", "", text)  # remove markdown chars
+    text = re.sub(r"[*_#`]", "", text)
     text = text.replace("•", " ").replace("-", " ")
     text = text.replace(":", ": ")
     return text.strip()
@@ -78,7 +78,7 @@ elif mode == "Voice":
         start_prompt="Start Recording",
         stop_prompt="Stop Recording",
         key="recorder",
-        format="wav"   # ✅ directly record as wav, no ffmpeg needed
+        format="wav"
     )
 
     if audio_data and "bytes" in audio_data:
@@ -86,7 +86,6 @@ elif mode == "Voice":
             tmpfile.write(audio_data["bytes"])
             wav_path = tmpfile.name
 
-        # Recognize speech
         recognizer = sr.Recognizer()
         with sr.AudioFile(wav_path) as source:
             audio = recognizer.record(source)
@@ -116,15 +115,21 @@ if st.button("Get Answer"):
             # Show text
             st.success(answer_translated)
 
-            # Prepare for TTS
-            tts_text = clean_text_for_tts(answer_translated)
-            tts = gTTS(text=tts_text, lang=languages[user_lang])
+            # Split long text for TTS if needed
+            tts_chunks = []
+            max_chunk_size = 200  # gTTS can fail on very long text
+            text_to_process = clean_text_for_tts(answer_translated)
+            for i in range(0, len(text_to_process), max_chunk_size):
+                tts_chunks.append(text_to_process[i:i+max_chunk_size])
 
-            # ✅ Save audio to memory instead of file (fix for Streamlit Cloud)
-            audio_bytes = BytesIO()
-            tts.write_to_fp(audio_bytes)
-            audio_bytes.seek(0)
+            # Combine audio into a single BytesIO
+            combined_audio = BytesIO()
+            for chunk in tts_chunks:
+                tts = gTTS(text=chunk, lang=languages[user_lang])
+                tts.write_to_fp(combined_audio)
+
+            combined_audio.seek(0)  # Reset pointer
 
             # Play audio
-            st.audio(audio_bytes, format="audio/mp3")
+            st.audio(combined_audio, format="audio/mp3", start_time=0)
 
