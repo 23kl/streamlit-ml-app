@@ -3,8 +3,6 @@ import re
 import tempfile
 import streamlit as st
 from dotenv import load_dotenv
-
-# LangChain
 from langchain_community.document_loaders import TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
@@ -12,14 +10,12 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.chains import RetrievalQA
 from langchain_groq import ChatGroq
 
-# TTS & Translation
-from gtts import gTTS
+# Voice + Translation
 from deep_translator import GoogleTranslator
-
-# Speech Recognition
 import speech_recognition as sr
 from streamlit_mic_recorder import mic_recorder
 from pydub import AudioSegment
+from gtts import gTTS  # ✅ Google TTS
 
 # Load environment variables
 load_dotenv()
@@ -39,9 +35,7 @@ languages = {
 }
 user_lang = st.selectbox("🌐 Select your language:", list(languages.keys()), index=0)
 
-# ------------------------
 # Load vector store
-# ------------------------
 @st.cache_resource
 def load_vector_store():
     loader = TextLoader("app/india_herbs_regions_soil_climate_rules.csv")
@@ -54,39 +48,24 @@ def load_vector_store():
 
 vectorstore = load_vector_store()
 
-# ------------------------
 # Initialize Groq LLM
-# ------------------------
 llm = ChatGroq(model="llama-3.1-8b-instant", api_key=groq_api_key)
 
-# ------------------------
 # Create RAG pipeline
-# ------------------------
 qa = RetrievalQA.from_chain_type(
     llm=llm,
     retriever=vectorstore.as_retriever(),
     chain_type="stuff"
 )
 
-# ------------------------
-# Helpers
-# ------------------------
+# Function to clean text before TTS
 def clean_text_for_tts(text: str) -> str:
     text = re.sub(r"[*_#`]", "", text)  # remove markdown chars
     text = text.replace("•", " ").replace("-", " ")
     text = text.replace(":", ": ")
     return text.strip()
 
-def text_to_speech_gtts(text: str, lang_code: str):
-    """Convert text to speech using gTTS and return the saved file path"""
-    tts = gTTS(text=text, lang=lang_code, slow=False)
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
-        tts.save(tmpfile.name)
-        return tmpfile.name
-
-# ------------------------
 # Input method
-# ------------------------
 mode = st.radio("Choose Input Method:", ["Text", "Voice"])
 query_text = ""
 
@@ -120,9 +99,7 @@ elif mode == "Voice":
         except sr.RequestError as e:
             st.error(f"❌ Could not request results; {e}")
 
-# ------------------------
-# Run Query
-# ------------------------
+# Run query
 if st.button("Get Answer"):
     if query_text.strip() == "":
         st.warning("Please enter or speak a question.")
@@ -134,18 +111,21 @@ if st.button("Get Answer"):
             # Get answer
             answer = qa.run(query_in_english)
 
-            # Translate answer back to user language
+            # Translate back to user language
             answer_translated = GoogleTranslator(source='en', target=languages[user_lang]).translate(answer)
 
             # Show text
             st.success(answer_translated)
 
-            # Prepare TTS
+            # Prepare for TTS
             tts_text = clean_text_for_tts(answer_translated)
 
-            # Convert to speech (fast)
-            audio_file = text_to_speech_gtts(tts_text, lang_code=languages[user_lang])
+            # ✅ Google TTS instead of ElevenLabs
+            tts = gTTS(text=tts_text, lang=languages[user_lang])
+            audio_file = "response.mp3"
+            tts.save(audio_file)
 
             # Play audio
             st.audio(audio_file, format="audio/mp3")
+
 
