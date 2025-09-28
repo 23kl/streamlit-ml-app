@@ -1,6 +1,6 @@
 import os
 import re
-import tempfile
+from io import BytesIO
 from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
@@ -83,6 +83,7 @@ elif mode == "Voice":
     )
 
     if audio_data and "bytes" in audio_data:
+        import tempfile
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
             tmpfile.write(audio_data["bytes"])
             wav_path = tmpfile.name
@@ -119,13 +120,19 @@ if st.button("Get Answer"):
             # Clean text for TTS
             tts_text = clean_text_for_tts(answer_translated)
 
-            # Save TTS to temporary mp3 file
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
-                tts = gTTS(text=tts_text, lang=languages[user_lang])
-                tts.save(tmpfile.name)
-                mp3_path = tmpfile.name
+            # Split into chunks if long
+            max_chunk_size = 200
+            tts_chunks = [tts_text[i:i+max_chunk_size] for i in range(0, len(tts_text), max_chunk_size)]
 
-            # Play audio
-            st.audio(mp3_path, format="audio/mp3", start_time=0)
+            # Combine all audio into one BytesIO
+            audio_bytes = BytesIO()
+            for chunk in tts_chunks:
+                tts = gTTS(text=chunk, lang=languages[user_lang])
+                tts.write_to_fp(audio_bytes)
 
+            # Reset pointer to start
+            audio_bytes.seek(0)
+
+            # Play audio (works on any device)
+            st.audio(audio_bytes, format="audio/mp3", start_time=0)
 
