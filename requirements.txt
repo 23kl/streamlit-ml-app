@@ -9,7 +9,5 @@ torch
 deep-translator
 speechrecognition
 streamlit-mic-recorder
-TTS
-soundfile
 sentence-transformers
-python>=3.10,<3.12
+google-cloud-texttospeech
