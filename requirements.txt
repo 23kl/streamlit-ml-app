@@ -7,8 +7,6 @@ faiss-cpu
 torch
 transformers
 sentence-transformers
-pydub
-elevenlabs
 deep-translator
 SpeechRecognition
 streamlit-mic-recorder
