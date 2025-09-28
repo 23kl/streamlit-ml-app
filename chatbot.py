@@ -1,8 +1,6 @@
 import os
 import re
 from io import BytesIO
-import numpy as np
-import soundfile as sf
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader
@@ -14,7 +12,7 @@ from langchain_groq import ChatGroq
 from deep_translator import GoogleTranslator
 import speech_recognition as sr
 from streamlit_mic_recorder import mic_recorder
-from TTS.api import TTS
+from gtts import gTTS
 
 # Load environment variables
 load_dotenv()
@@ -22,7 +20,7 @@ groq_api_key = os.getenv("GROQ_API_KEY")
 
 # Streamlit UI
 st.set_page_config(page_title="Farmer's Herb Chatbot", page_icon="🌿")
-st.title("🌿 Farmer’s Herb & Regulation Chatbot")
+st.title("🌿 Farmer’s Herb & Regulation Chatbot (Free TTS)")
 
 # Language selector
 languages = {
@@ -37,8 +35,7 @@ user_lang = st.selectbox("🌐 Select your language:", list(languages.keys()), i
 # Load vector store
 @st.cache_resource
 def load_vector_store():
-    data_file = "india_herbs_regions_soil_climate_rules.csv"
-    loader = TextLoader(data_file)
+    loader = TextLoader("india_herbs_regions_soil_climate_rules.csv")
     documents = loader.load()
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = splitter.split_documents(documents)
@@ -58,21 +55,18 @@ qa = RetrievalQA.from_chain_type(
     chain_type="stuff"
 )
 
-# Initialize multilingual Coqui TTS
-tts_model = TTS(model_name="coqui/xtts_v2")
-
-# Function to clean text for TTS
+# Clean text for TTS
 def clean_text_for_tts(text: str) -> str:
     text = re.sub(r"[*_#`]", "", text)
     text = text.replace("•", " ").replace("-", " ")
     text = text.replace(":", ": ")
     return text.strip()
 
-# Convert text to audio BytesIO using Coqui TTS
-def tts_to_bytes(text: str) -> BytesIO:
-    wav = tts_model.tts(text)
+# Convert text to MP3 bytes using gTTS
+def gtts_to_bytes(text: str, lang: str) -> BytesIO:
+    tts = gTTS(text=text, lang=lang)
     audio_bytes = BytesIO()
-    sf.write(audio_bytes, np.array(wav), tts_model.synthesizer.output_sample_rate, format='WAV')
+    tts.write_to_fp(audio_bytes)
     audio_bytes.seek(0)
     return audio_bytes
 
@@ -127,20 +121,13 @@ if st.button("Get Answer"):
             # Show text
             st.success(answer_translated)
 
-            # Clean text for TTS
+            # Clean text
             tts_text = clean_text_for_tts(answer_translated)
 
-            # Split long text into chunks
-            max_chunk_size = 200
-            chunks = [tts_text[i:i+max_chunk_size] for i in range(0, len(tts_text), max_chunk_size)]
+            # Generate audio
+            audio_bytes = gtts_to_bytes(tts_text, languages[user_lang])
 
-            # Combine all chunks into one BytesIO
-            combined_audio = BytesIO()
-            for chunk in chunks:
-                audio_chunk = tts_to_bytes(chunk)
-                combined_audio.write(audio_chunk.read())
-
-            combined_audio.seek(0)
-            st.audio(combined_audio, format="audio/wav", start_time=0)
+            # Play audio
+            st.audio(audio_bytes, format="audio/mp3")
 
 
